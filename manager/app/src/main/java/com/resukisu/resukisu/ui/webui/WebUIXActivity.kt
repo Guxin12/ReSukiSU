@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dergoogler.mmrl.platform.Platform
 import com.dergoogler.mmrl.platform.model.ModId
 import com.dergoogler.mmrl.ui.component.Loading
@@ -58,14 +59,12 @@ class WebUIXActivity : ComponentActivity() {
         setContent {
             KernelSUTheme {
                 var isLoading by remember { mutableStateOf(true) }
+                val moduleViewModel = viewModel<ModuleViewModel>(
+                    viewModelStoreOwner = ksuApp
+                )
 
                 LaunchedEffect(Unit) {
-                    val viewModel = ModuleViewModel()
-                    if (viewModel.moduleList.isEmpty()) {
-                        viewModel.fetchModuleList()
-                    }
-
-                    val moduleInfo = viewModel.moduleList.find { info -> info.id == moduleId }
+                    val moduleInfo = moduleViewModel.moduleList.find { info -> info.id == moduleId }
 
                     if (moduleInfo == null) {
                         Toast.makeText(
