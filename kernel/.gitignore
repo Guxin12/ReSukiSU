@@ -2,6 +2,7 @@
 .thinlto-cache/
 compile_commands.json
 *.ko
+*.bak
 *.o
 *.mod
 *.lds
