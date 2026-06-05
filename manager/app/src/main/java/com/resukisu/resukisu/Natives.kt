@@ -24,7 +24,8 @@ object Natives {
     // 34713: change kernel_su_domain to u:r:ksu:s0
     // 34795: feature id 3 to adb root
     // 34944: Drop KPM support
-    const val MINIMAL_SUPPORTED_KERNEL = 34944
+    // 34945: allowlist v4 root profile flags
+    const val MINIMAL_SUPPORTED_KERNEL = 34945
 
     const val KERNEL_SU_DOMAIN = "u:r:ksu:s0"
 
@@ -136,6 +137,7 @@ object Natives {
     external fun isSelinuxHideEnabled(): Boolean
     external fun setSelinuxHideEnabled(enabled: Boolean): Int
 
+    external fun isKPMEnabled(): Boolean
     external fun getHookType(): String
 
     /**

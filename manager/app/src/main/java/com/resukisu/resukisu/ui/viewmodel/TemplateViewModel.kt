@@ -54,6 +54,9 @@ class TemplateViewModel : ViewModel() {
         val capabilities: List<Int> = mutableListOf(),
         val context: String = Natives.KERNEL_SU_DOMAIN,
         val rules: List<String> = mutableListOf(),
+        val flags: List<Int> = mutableListOf(
+            Natives.Profile.RootProfileFlag.NO_NEW_PRIVS.ordinal // default no new privs for new template
+        )
     ) : Parcelable
 
     var isRefreshing by mutableStateOf(false)
@@ -227,6 +230,7 @@ private fun fromJSON(templateJson: JSONObject): TemplateViewModel.TemplateInfo? 
     return runCatching {
         val groupsJsonArray = templateJson.optJSONArray("groups")
         val capabilitiesJsonArray = templateJson.optJSONArray("capabilities")
+        val flagsJsonArray = templateJson.optJSONArray("flags")
         val context = templateJson.optString("context").takeIf { it.isNotEmpty() }
             ?: Natives.KERNEL_SU_DOMAIN
         val namespace = templateJson.optString("namespace").takeIf { it.isNotEmpty() }
@@ -251,7 +255,11 @@ private fun fromJSON(templateJson: JSONObject): TemplateViewModel.TemplateInfo? 
             context = context,
             rules = rulesJsonArray?.mapCatching<String, String>({ it }, {
                 Log.e(TAG, "ignore invalid rule: $it", it)
-            }).orEmpty()
+            }).orEmpty(),
+            flags = getEnumOrdinals(
+                flagsJsonArray,
+                Natives.Profile.RootProfileFlag::class.java
+            ).map { it.ordinal }
         )
         templateInfo
     }.onFailure {
@@ -299,6 +307,17 @@ fun TemplateViewModel.TemplateInfo.toJSON(): JSONObject {
 
         if (template.rules.isNotEmpty()) {
             put("rules", JSONArray(template.rules))
+        }
+
+        if (template.flags.isNotEmpty()) {
+            put(
+                "flags", JSONArray(
+                    Natives.Profile.RootProfileFlag.entries.filter {
+                    template.flags.contains(it.ordinal)
+                }.map {
+                    it.name
+                }
+            ))
         }
     }
 }

@@ -147,6 +147,7 @@ NativeBridge(getAppProfile, jobject, jstring pkg, jint uid) {
 	jfieldID capabilitiesField = GetEnvironment()->GetFieldID(env, cls, "capabilities", "Ljava/util/List;");
 	jfieldID domainField = GetEnvironment()->GetFieldID(env, cls, "context", "Ljava/lang/String;");
 	jfieldID namespacesField = GetEnvironment()->GetFieldID(env, cls, "namespace", "I");
+	jfieldID flagsField = GetEnvironment()->GetFieldID(env, cls, "flags", "Ljava/util/List;");
 
 	jfieldID nonRootUseDefaultField = GetEnvironment()->GetFieldID(env, cls, "nonRootUseDefault", "Z");
 	jfieldID umountModulesField = GetEnvironment()->GetFieldID(env, cls, "umountModules", "Z");
@@ -198,6 +199,37 @@ NativeBridge(getAppProfile, jobject, jstring pkg, jint uid) {
 										 GetEnvironment()->NewStringUTF(env, profile.rp_config.profile.selinux_domain));
 		GetEnvironment()->SetIntField(env, obj, namespacesField, profile.rp_config.profile.namespaces);
 		GetEnvironment()->SetBooleanField(env, obj, allowSuField, profile.allow_su);
+
+		jobject flagsList = GetEnvironment()->GetObjectField(env, obj, flagsField);
+		if (flagsList != nullptr) {
+			jclass list_cls = GetEnvironment()->GetObjectClass(env, flagsList);
+			jmethodID list_add_mid = GetEnvironment()->GetMethodID(env, list_cls, "add",
+																   "(Ljava/lang/Object;)Z");
+
+			jclass enum_cls = GetEnvironment()->FindClass(env,
+														  "com/resukisu/resukisu/Natives$Profile$RootProfileFlag");
+			jmethodID values_mid = GetEnvironment()->GetStaticMethodID(env, enum_cls, "values",
+																	   "()[Lcom/resukisu/resukisu/Natives$Profile$RootProfileFlag;");
+
+			jobjectArray enum_values = (jobjectArray)GetEnvironment()->CallStaticObjectMethod(env,
+																							  enum_cls,
+																							  values_mid);
+
+			unsigned long long c_flags = profile.rp_config.profile.flags;
+
+			if (c_flags & FLAG_KSU_NO_NEW_PRIVS) {
+				jobject flag_val = GetEnvironment()->GetObjectArrayElement(env, enum_values, 0);
+				if (flag_val != nullptr) {
+					GetEnvironment()->CallBooleanMethod(env, flagsList, list_add_mid, flag_val);
+					GetEnvironment()->DeleteLocalRef(env, flag_val);
+				}
+			}
+
+			GetEnvironment()->DeleteLocalRef(env, enum_values);
+			GetEnvironment()->DeleteLocalRef(env, enum_cls);
+			GetEnvironment()->DeleteLocalRef(env, list_cls);
+		}
+
 	} else {
 		GetEnvironment()->SetBooleanField(env, obj, nonRootUseDefaultField, profile.nrp_config.use_default);
 		GetEnvironment()->SetBooleanField(env, obj, umountModulesField, profile.nrp_config.profile.umount_modules);
@@ -222,6 +254,7 @@ NativeBridge(setAppProfile, jboolean, jobject profile) {
 	jfieldID capabilitiesField = GetEnvironment()->GetFieldID(env, cls, "capabilities", "Ljava/util/List;");
 	jfieldID domainField = GetEnvironment()->GetFieldID(env, cls, "context", "Ljava/lang/String;");
 	jfieldID namespacesField = GetEnvironment()->GetFieldID(env, cls, "namespace", "I");
+	jfieldID flagsField = GetEnvironment()->GetFieldID(env, cls, "flags", "Ljava/util/List;");
 
 	jfieldID nonRootUseDefaultField = GetEnvironment()->GetFieldID(env, cls, "nonRootUseDefault", "Z");
 	jfieldID umountModulesField = GetEnvironment()->GetFieldID(env, cls, "umountModules", "Z");
@@ -248,6 +281,7 @@ NativeBridge(setAppProfile, jboolean, jobject profile) {
 	jobject domain = GetEnvironment()->GetObjectField(env, profile, domainField);
 	jboolean allowSu = GetEnvironment()->GetBooleanField(env, profile, allowSuField);
 	jboolean umountModules = GetEnvironment()->GetBooleanField(env, profile, umountModulesField);
+	jobject flagsList = GetEnvironment()->GetObjectField(env, profile, flagsField);
 
 	struct app_profile p = { 0 };
 	p.version = KSU_APP_PROFILE_VER;
@@ -270,7 +304,7 @@ NativeBridge(setAppProfile, jboolean, jobject profile) {
 
 		int groups_count = getListSize(env, groups);
 		if (groups_count > KSU_MAX_GROUPS) {
-            LOGD("groups count too large: %d", groups_count);
+			LOGD("groups count too large: %d", groups_count);
 			return false;
 		}
 		p.rp_config.profile.groups_count = groups_count;
@@ -283,6 +317,35 @@ NativeBridge(setAppProfile, jboolean, jobject profile) {
 		GetEnvironment()->ReleaseStringUTFChars(env, (jstring) domain, cdomain);
 
 		p.rp_config.profile.namespaces = GetEnvironment()->GetIntField(env, profile, namespacesField);
+
+		unsigned long long c_flags = 0;
+		if (flagsList != nullptr) {
+			jclass list_cls = GetEnvironment()->GetObjectClass(env, flagsList);
+			jmethodID list_size_mid = GetEnvironment()->GetMethodID(env, list_cls, "size", "()I");
+			jmethodID list_get_mid = GetEnvironment()->GetMethodID(env, list_cls, "get",
+																   "(I)Ljava/lang/Object;");
+			jint size = GetEnvironment()->CallIntMethod(env, flagsList, list_size_mid);
+			for (jint i = 0; i < size; ++i) {
+				jobject flag_obj = GetEnvironment()->CallObjectMethod(env, flagsList, list_get_mid,
+																	  i);
+				if (flag_obj == nullptr) continue;
+				jclass enum_cls = GetEnvironment()->GetObjectClass(env, flag_obj);
+				jmethodID ordinal_mid = GetEnvironment()->GetMethodID(env, enum_cls, "ordinal",
+																	  "()I");
+				jint ordinal = GetEnvironment()->CallIntMethod(env, flag_obj, ordinal_mid);
+				switch (ordinal) {
+					case 0:
+						c_flags |= FLAG_KSU_NO_NEW_PRIVS;
+						break;
+					default:
+						break;
+				}
+				GetEnvironment()->DeleteLocalRef(env, enum_cls);
+				GetEnvironment()->DeleteLocalRef(env, flag_obj);
+			}
+			GetEnvironment()->DeleteLocalRef(env, list_cls);
+		}
+		p.rp_config.profile.flags = c_flags;
 	} else {
 		p.nrp_config.use_default = GetEnvironment()->GetBooleanField(env, profile, nonRootUseDefaultField);
 		p.nrp_config.profile.umount_modules = umountModules;

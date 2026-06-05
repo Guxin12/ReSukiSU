@@ -300,6 +300,18 @@ private fun AppProfileInner(
                                         )
                                     )
                                 }
+
+                                if (it == Mode.Custom) {
+                                    val newFlags = HashSet<Natives.Profile.RootProfileFlag>()
+                                    newFlags.addAll(profile.flags)
+                                    newFlags.add(Natives.Profile.RootProfileFlag.NO_NEW_PRIVS)
+
+                                    onProfileChange(
+                                        profile.copy(
+                                            flags = newFlags.toList()
+                                        )
+                                    )
+                                }
                                 mode = it
                             }
                         }

@@ -131,6 +131,16 @@ fun SegmentedColumnScope.rootProfileConfig(
     }
 
     item {
+        RootProfileFlagPanel(selected = profile.flags) {
+            onProfileChange(
+                profile.copy(
+                    flags = it,
+                )
+            )
+        }
+    }
+
+    item {
         SELinuxPanel(profile = profile, onSELinuxChange = { domain, rules ->
             onProfileChange(
                 profile.copy(
@@ -330,6 +340,69 @@ fun MountNameSpacePanel(
         ), selectedIndex = profile.namespace, onSelectedIndexChange = { index ->
             onMntNamespaceChange(index)
         })
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RootProfileFlagPanel(
+    selected: List<Natives.Profile.RootProfileFlag>,
+    onFlagChange: (flags: List<Natives.Profile.RootProfileFlag>) -> Unit
+) {
+    val selectFlagsDialog = rememberCustomDialog { dismiss ->
+        val caps = Natives.Profile.RootProfileFlag.entries.toTypedArray().sortedWith(
+            compareBy<Natives.Profile.RootProfileFlag> { if (selected.contains(it)) 0 else 1 }
+                .then(compareBy { it.name })
+        )
+        val options = caps.map { value ->
+            ListOption(
+                titleText = value.display,
+                subtitleText = value.desc,
+                selected = selected.contains(value),
+            )
+        }
+
+        val selection = HashSet(selected)
+
+        ListDialog(
+            state = rememberUseCaseState(visible = true, onFinishedRequest = {
+                onFlagChange(selection.toList())
+            }, onCloseRequest = {
+                dismiss()
+            }),
+            header = Header.Default(
+                title = stringResource(R.string.profile_flags),
+            ),
+            selection = ListSelection.Multiple(
+                showCheckBoxes = true,
+                options = options
+            ) { indecies, _ ->
+                // Handle selection
+                selection.clear()
+                indecies.forEach { index ->
+                    val group = caps[index]
+                    selection.add(group)
+                }
+            }
+        )
+    }
+
+    SettingsJumpPageWidget(
+        title = stringResource(R.string.profile_flags),
+        iconPlaceholder = false,
+        onClick = {
+            selectFlagsDialog.show()
+        },
+        descriptionColumnContent = {
+            FlowRow {
+                selected.forEach { group ->
+                    AssistChip(
+                        modifier = Modifier.padding(3.dp),
+                        onClick = {},
+                        label = { Text(group.display) })
+                }
+            }
+        }
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
